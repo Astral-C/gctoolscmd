@@ -31,7 +31,7 @@ void PackFolder(std::shared_ptr<Archive::Rarc> arc, std::shared_ptr<Archive::Fol
     for (auto const& dir_entry : std::filesystem::directory_iterator(path)){
         if(std::filesystem::is_directory(dir_entry.path())){
             std::shared_ptr<Archive::Folder> subdir = Archive::Folder::Create(arc);
-            subdir->SetName(dir_entry.path().filename());
+            subdir->SetName(dir_entry.path().filename().string());
             folder->AddSubdirectory(subdir);
             
             PackFolder(arc, subdir, dir_entry.path());
@@ -45,7 +45,7 @@ void PackFolder(std::shared_ptr<Archive::Rarc> arc, std::shared_ptr<Archive::Fol
             fileStream.readBytesTo(fileData, fileStream.getSize());
             
             file->SetData(fileData, fileStream.getSize());
-            file->SetName(dir_entry.path().filename());
+            file->SetName(dir_entry.path().filename().string());
 
             folder->AddFile(file);
 
@@ -82,10 +82,10 @@ int main(int argc, char* argv[]){
     argparse::ArgumentParser gctools("gctoolscmd", "0.0.1", argparse::default_arguments::help);
 
     gctools.add_argument("-i", "--input").required().help("File/Directory to operate on");
-    gctools.add_argument("-l", "--level").help("Compression level for yaz0 compression").default_value(7).store_into(level);
-    gctools.add_argument("-c", "--compress").help("Compression method to use");
-    gctools.add_argument("-x", "--extract").flag();
-    gctools.add_argument("-p", "--pack").flag();
+    gctools.add_argument("-l", "--level").help("Compression level for yaz0 compression (0-9)").default_value(7).store_into(level);
+    gctools.add_argument("-c", "--compress").help("Compression method to use [YAY0, yay0, YAZ0, yaz0]");
+    gctools.add_argument("-x", "--extract").help("Extract input archive").flag();
+    gctools.add_argument("-p", "--pack").help("Pack input folder").flag();
 
     try {
         gctools.parse_args(argc, argv);

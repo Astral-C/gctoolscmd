@@ -82,7 +82,7 @@ int main(int argc, char* argv[]){
     argparse::ArgumentParser gctools("gctoolscmd", "0.0.1", argparse::default_arguments::help);
 
     gctools.add_argument("-i", "--input").required().help("File/Directory to operate on");
-    gctools.add_argument("-l", "--level").help("Compression level for yaz0 compression").default_value(7).implicit_value(true).store_into(level);
+    gctools.add_argument("-l", "--level").help("Compression level for yaz0 compression").default_value(7).store_into(level);
     gctools.add_argument("-c", "--compress").help("Compression method to use");
     gctools.add_argument("-x", "--extract").flag();
     gctools.add_argument("-p", "--pack").flag();

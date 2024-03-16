@@ -55,17 +55,20 @@ void PackFolder(std::shared_ptr<Archive::Rarc> arc, std::shared_ptr<Archive::Fol
     std::filesystem::current_path(std::filesystem::current_path().parent_path());
 }
 
-void PackArchive(std::filesystem::path path, Compression::Format format, int level){
+void PackArchive(std::filesystem::path path, Compression::Format format, int level, bool cmpExt){
     std::shared_ptr<Archive::Rarc> archive = Archive::Rarc::Create();
     std::shared_ptr<Archive::Folder> root = Archive::Folder::Create(archive);
     archive->SetRoot(root);
     root->SetName(path.filename().string());
 
     std::string ext = ".arc";
-    if(format == Compression::Format::YAY0){
-        ext = ".szp";
-    } else if (format == Compression::Format::YAZ0){
-        ext = ".szs";
+
+    if(!cmpExt) {
+        if(format == Compression::Format::YAY0){
+            ext = ".szp";
+        } else if (format == Compression::Format::YAZ0){
+            ext = ".szs";
+        }
     }
 
     PackFolder(archive, root, std::filesystem::current_path() / path);
@@ -86,6 +89,7 @@ int main(int argc, char* argv[]){
     gctools.add_argument("-c", "--compress").help("Compression method to use [YAY0, yay0, YAZ0, yaz0]");
     gctools.add_argument("-x", "--extract").help("Extract input archive").flag();
     gctools.add_argument("-p", "--pack").help("Pack input folder").flag();
+    gctools.add_argument("-a", "--arcext").help("Set the output extension to arc regardless of compression").flag();
 
     try {
         gctools.parse_args(argc, argv);
@@ -158,7 +162,7 @@ int main(int argc, char* argv[]){
             QCoreApplication::processEvents();
         }
 
-        PackArchive(path, format, level);
+        PackArchive(path, format, level, gctools.is_used("--arcext"));
         if(format != Compression::Format::None) msg.close();
     }
 

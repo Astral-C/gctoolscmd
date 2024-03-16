@@ -39,7 +39,7 @@ void PackFolder(std::shared_ptr<Archive::Rarc> arc, std::shared_ptr<Archive::Fol
         } else {
             std::shared_ptr<Archive::File> file = Archive::File::Create();
 
-            bStream::CFileStream fileStream(dir_entry.path(), bStream::Endianess::Big, bStream::OpenMode::In);
+            bStream::CFileStream fileStream(dir_entry.path().string(), bStream::Endianess::Big, bStream::OpenMode::In);
             
             uint8_t* fileData = new uint8_t[fileStream.getSize()];
             fileStream.readBytesTo(fileData, fileStream.getSize());

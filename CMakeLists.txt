@@ -14,8 +14,8 @@ file(GLOB_RECURSE GCTOOLSCMD_SRC
     "lib/gctoolsplusplus/lib/bstream.cpp"
 )
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets)
+find_package(Qt5 REQUIRED COMPONENTS Widgets)
 
 add_executable(gctools ${GCTOOLSCMD_SRC})
 target_include_directories(gctools PUBLIC include lib/gctoolsplusplus/lib/bStream lib/gctoolsplusplus/include lib/argparse/include)
-target_link_libraries(gctools gctools++ Qt6::Widgets)
+target_link_libraries(gctools gctools++ Qt5::Widgets)

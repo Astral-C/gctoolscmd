@@ -1,0 +1,10 @@
+*.szp
+*.arc
+*.szs
+Makefile
+gctools
+*.cmake
+CMakeCache.txt
+.vscode
+.qt
+CMakeFiles

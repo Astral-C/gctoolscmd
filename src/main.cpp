@@ -1,5 +1,6 @@
 #include <thread>
 #include <filesystem>
+#include <GCM.hpp>
 #include <Archive.hpp>
 #include <Compression.hpp>
 #include <argparse/argparse.hpp>
@@ -78,6 +79,22 @@ void PackArchive(std::filesystem::path path, Compression::Format format, int lev
 
 }
 
+void ExtractFolderISO(std::shared_ptr<Disk::Folder> folder){
+    std::filesystem::create_directory(folder->GetName());
+    std::filesystem::current_path(std::filesystem::current_path() / folder->GetName());
+
+    for(auto file : folder->GetFiles()){
+        bStream::CFileStream extractFile(file->GetName(), bStream::Endianess::Big, bStream::OpenMode::Out);
+        extractFile.writeBytes(file->GetData(), file->GetSize());
+    }
+
+    for(auto subdir : folder->GetSubdirectories()){
+        ExtractFolderISO(subdir);
+    }
+
+    std::filesystem::current_path(std::filesystem::current_path().parent_path());
+}
+
 int main(int argc, char* argv[]){
     QApplication app(argc, argv);
     int level; //compression level for yaz0
@@ -87,7 +104,7 @@ int main(int argc, char* argv[]){
     gctools.add_argument("-i", "--input").required().help("File/Directory to operate on");
     gctools.add_argument("-l", "--level").help("Compression level for yaz0 compression (0-9)").default_value(7).store_into(level);
     gctools.add_argument("-c", "--compress").help("Compression method to use [YAY0, yay0, YAZ0, yaz0]");
-    gctools.add_argument("-x", "--extract").help("Extract input archive").flag();
+    gctools.add_argument("-x", "--extract").help("Extract input").flag();
     gctools.add_argument("-p", "--pack").help("Pack input folder").flag();
     gctools.add_argument("-a", "--arcext").help("Set the output extension to arc regardless of compression").flag();
 
@@ -112,15 +129,26 @@ int main(int argc, char* argv[]){
             return 1;
         }
 
-        std::shared_ptr<Archive::Rarc> archive = Archive::Rarc::Create();
-        
-        bStream::CFileStream archiveStream(path.string(), bStream::Endianess::Big, bStream::OpenMode::In);
-        if(!archive->Load(&archiveStream)){
-            std::cerr << "Couldn't parse file " << path.string() << std::endl;
-            return 1;
-        }
+        if(path.extension() == ".iso" || path.extension() == ".gcm"){
+            std::shared_ptr<Disk::Image> image = Disk::Image::Create();
+            bStream::CFileStream imageStream(path.string(), bStream::Endianess::Big, bStream::OpenMode::In);
+            if(!image->Load(&imageStream)){
+                std::cerr << "Couldn't parse image " << path.string() << std::endl;
+                return 1;
+            }
+            ExtractFolderISO(image->GetRoot());
+        } else {
 
-        ExtractFolder(archive->GetRoot());
+            std::shared_ptr<Archive::Rarc> archive = Archive::Rarc::Create();
+            
+            bStream::CFileStream archiveStream(path.string(), bStream::Endianess::Big, bStream::OpenMode::In);
+            if(!archive->Load(&archiveStream)){
+                std::cerr << "Couldn't parse archive " << path.string() << std::endl;
+                return 1;
+            }
+
+            ExtractFolder(archive->GetRoot());
+        }
 
     } else if(gctools.is_used("--pack")){
         if(!std::filesystem::is_directory(path)){

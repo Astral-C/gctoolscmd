@@ -9,3 +9,5 @@ CMakeCache.txt
 .qt
 CMakeFiles
 map2
+*.iso
+*.reg

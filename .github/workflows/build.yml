@@ -71,23 +71,23 @@ jobs:
       - name: Create App Package Linux
         if: runner.os == 'Linux'
         run: |
-          mkdir gctoolscmd-build
-          cp build/gctoolscmd gctoolscmd-build/gctoolscmd
+          mkdir gctools-build
+          cp build/gctools gctools-build/gctools
       - name: Create App Package Windows
         if: runner.os == 'Windows'
         run: |
-          mkdir gctoolscmd-build
-          cp build/gctoolscmd.exe gctoolscmd-build/gctoolscmd.exe
-          cp build/*.dll gctoolscmd-build
+          mkdir gctools-build
+          cp build/gctools.exe gctools-build/gctools.exe
+          cp build/*.dll gctools-build
       - name: Upload App Windows
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v3
         with:
-          name: gctoolscmd-windows
-          path: gctoolscmd-build
+          name: gctools-windows
+          path: gctools-build
       - name: Upload App Linux
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v3
         with:
-          name: gctoolscmd-linux
-          path: gctoolscmd-build
+          name: gctools-linux
+          path: gctools-build

@@ -264,7 +264,7 @@ int main(int argc, char* argv[]){
 
         Tpl tpl;
         if(!tpl.Load(&imageStream)){
-
+            imageStream.seek(0);
             Bti img;
             if(!img.Load(&imageStream)){
                 stbi_write_png(path.string().c_str(), img.mWidth, img.mHeight, 4, img.GetData(), img.mWidth * 4);

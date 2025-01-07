@@ -72,13 +72,11 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           mkdir gctoolscmd-build
-          cp -r res gctoolscmd-build/res
           cp build/gctoolscmd gctoolscmd-build/gctoolscmd
       - name: Create App Package Windows
         if: runner.os == 'Windows'
         run: |
           mkdir gctoolscmd-build
-          cp -r res gctoolscmd-build/res
           cp build/gctoolscmd.exe gctoolscmd-build/gctoolscmd.exe
           cp build/*.dll gctoolscmd-build
       - name: Upload App Windows

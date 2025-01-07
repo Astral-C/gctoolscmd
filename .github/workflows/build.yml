@@ -78,7 +78,6 @@ jobs:
         run: |
           mkdir gctools-build
           cp build/gctools.exe gctools-build/gctools.exe
-          cp build/*.dll gctools-build
       - name: Upload App Windows
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v3

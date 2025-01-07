@@ -1,14 +1,15 @@
 #include <thread>
 #include <filesystem>
 #include <GCM.hpp>
+#include <Bti.hpp>
 #include <Archive.hpp>
 #include <Compression.hpp>
 #include <argparse/argparse.hpp>
-#include <QApplication>
-#include <QMessageBox>
-#include <QLabel>
-#include <QLayout>
 
+#define STB_IMAGE_RESIZE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_resize2.h"
+#include "stb_image_write.h"
 
 void ExtractFolder(std::shared_ptr<Archive::Folder> folder){
     std::filesystem::create_directory(folder->GetName());
@@ -162,14 +163,18 @@ void ExtractFolderISO(std::shared_ptr<Disk::Folder> folder){
 }
 
 int main(int argc, char* argv[]){
-    QApplication app(argc, argv);
     int level; //compression level for yaz0
 
     argparse::ArgumentParser gctools("gctoolscmd", "0.0.1", argparse::default_arguments::help);
 
     gctools.add_argument("-i", "--input").required().help("File/Directory to operate on");
+    gctools.add_argument("-o", "--output").help("Output Path");
+    gctools.add_argument("-b", "--convert-bti").help("Convert BTI to other Image Format").flag();
+    gctools.add_argument("-t", "--thumbnail").help("Generate thumbnail for bti").flag();
+    gctools.add_argument("-f", "--format").help("Format to Convert BTI to");
     gctools.add_argument("-l", "--level").help("Compression level for yaz0 compression (0-9)").default_value(7).store_into(level);
     gctools.add_argument("-c", "--compress").help("Compression method to use [YAY0, yay0, YAZ0, yaz0]");
+    gctools.add_argument("-d", "--decompress").help("Only decompress this file");
     gctools.add_argument("-x", "--extract").help("Extract archive/gcm").flag();
     gctools.add_argument("-g", "--gcm").help("Indicate input is for GCM").flag();
     gctools.add_argument("-p", "--pack").help("Pack to archive/gcm").flag();
@@ -190,7 +195,52 @@ int main(int argc, char* argv[]){
         return 1;
     }
 
-    if(gctools.is_used("--extract")){
+    if(gctools.is_used("--convert-bti")){
+
+        std::cout << path.string() << std::endl;
+        bStream::CFileStream imageStream(path.string(), bStream::Endianess::Big, bStream::OpenMode::In);
+        path.replace_extension(".png");
+
+        Bti img;
+        if(!img.Load(&imageStream)){
+            return 1;
+        }
+        
+        std::string format = "png";
+        if(gctools.is_used("--format")){
+            format = gctools.get<std::string>("--format");
+        }
+        
+        path.replace_extension("."+format);
+
+        if(format == "png"){
+            stbi_write_png(path.string().c_str(), img.mWidth, img.mHeight, 4, img.GetData(), img.mWidth * 4);
+        } else if(format == "jpeg" || format == "jpg") {
+            stbi_write_jpg(path.string().c_str(), img.mWidth, img.mHeight, 4, img.GetData(), 100);
+        } else if(format == "tga"){
+            stbi_write_tga(path.string().c_str(), img.mWidth, img.mHeight, 4, img.GetData());
+        } else if(format == "bmp"){
+            stbi_write_bmp(path.string().c_str(), img.mWidth, img.mHeight, 4, img.GetData());
+        } else {
+            std::cerr << "Unrecognized output format " << format << std::endl;
+            return 1;
+        }
+        
+    } else if(gctools.is_used("--thumbnail")){
+        bStream::CFileStream imageStream(path.string(), bStream::Endianess::Big, bStream::OpenMode::In);
+        path.replace_extension(".png");
+        
+        if(gctools.is_used("--output")){
+            path = gctools.get("--output");
+        }
+
+        Bti img;
+        if(!img.Load(&imageStream)){
+            return 1;
+        }
+
+        stbi_write_png(path.string().c_str(), img.mWidth, img.mHeight, 4, img.GetData(), img.mWidth * 4);
+    } else if(gctools.is_used("--extract")){
         if(std::filesystem::is_directory(path)){
             std::cerr << path.string() << " is a directory" << std::endl;
             return 1;
@@ -229,14 +279,14 @@ int main(int argc, char* argv[]){
             Compression::Format format = Compression::Format::None;
 
             if(gctools.is_used("--compress")){
-                if(gctools.get("--compress")== "YAY0" || gctools.get("--compress") == "yay0"){
+                if(gctools.get("--compress") == "YAY0" || gctools.get("--compress") == "yay0"){
                     format = Compression::Format::YAY0;
                 } else if(gctools.get("--compress") == "YAZ0" || gctools.get("--compress") == "yaz0"){
                     format = Compression::Format::YAZ0;
                 }
             }
 
-            QMessageBox msg(QMessageBox::NoIcon, "GCTools", "<h4 align='center'>Compressing Archive</h4>", QMessageBox::NoButton);
+            /*QMessageBox msg(QMessageBox::NoIcon, "GCTools", "<h4 align='center'>Compressing Archive</h4>", QMessageBox::NoButton);
             if(format != Compression::Format::None){
                 msg.setStandardButtons(QMessageBox::NoButton);
                 msg.setModal(true);
@@ -258,10 +308,39 @@ int main(int argc, char* argv[]){
                 QCoreApplication::processEvents();
                 QCoreApplication::processEvents();
                 QCoreApplication::processEvents();
-            }
+            }*/
 
             PackArchive(path, format, level, gctools.is_used("--arcext"));
-            if(format != Compression::Format::None) msg.close();
+            //if(format != Compression::Format::None) msg.close();
+        }
+    } else if(gctools.is_used("--decompress")) {
+        std::string outpath = path.string()+".decompressed";
+        if(gctools.is_used("--output")){
+            outpath = gctools.get("--output");
+        }
+
+        Compression::Format format = Compression::Format::None;
+        bStream::CFileStream compressedStream(path.string(), bStream::Endianess::Big, bStream::OpenMode::In);
+        bStream::CFileStream decompressedStream(outpath, bStream::Endianess::Big, bStream::OpenMode::Out);
+        if(gctools.get("--decompress") == "YAY0" || gctools.get("--decompress") == "yay0"){
+            Compression::Yay0::Decompress(&compressedStream, &decompressedStream);
+        } else if(gctools.get("--decompress") == "YAZ0" || gctools.get("--decompress") == "yaz0"){
+            Compression::Yaz0::Decompress(&compressedStream, &decompressedStream);
+        }
+
+    } else if(gctools.is_used("--compress")){
+        std::string outpath = path.string()+".decompressed";
+        if(gctools.is_used("--output")){
+            outpath = gctools.get("--output");
+        }
+
+        Compression::Format format = Compression::Format::None;
+        bStream::CFileStream compressedStream(path.string(), bStream::Endianess::Big, bStream::OpenMode::In);
+        bStream::CFileStream decompressedStream(outpath, bStream::Endianess::Big, bStream::OpenMode::Out);
+        if(gctools.get("--compress") == "YAY0" || gctools.get("--compress") == "yay0"){
+            Compression::Yay0::Compress(&compressedStream, &decompressedStream);
+        } else if(gctools.get("--compress") == "YAZ0" || gctools.get("--compress") == "yaz0"){
+            Compression::Yaz0::Compress(&compressedStream, &decompressedStream, level);
         }
     }
 

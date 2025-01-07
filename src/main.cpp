@@ -170,6 +170,7 @@ int main(int argc, char* argv[]){
     gctools.add_argument("-i", "--input").required().help("File/Directory to operate on");
     gctools.add_argument("-o", "--output").help("Output Path");
     gctools.add_argument("-b", "--convert-bti").help("Convert BTI to other Image Format").flag();
+    gctools.add_argument("-u", "--convert-tpl").help("Convert TPL to other Image Format").flag();
     gctools.add_argument("-t", "--thumbnail").help("Generate thumbnail for bti").flag();
     gctools.add_argument("-f", "--format").help("Format to Convert BTI to");
     gctools.add_argument("-l", "--level").help("Compression level for yaz0 compression (0-9)").default_value(7).store_into(level);
@@ -195,9 +196,36 @@ int main(int argc, char* argv[]){
         return 1;
     }
 
-    if(gctools.is_used("--convert-bti")){
+    if(gctools.is_used("--convert-tpl")){
+        bStream::CFileStream imageStream(path.string(), bStream::Endianess::Big, bStream::OpenMode::In);
+        path.replace_extension(".png");
 
-        std::cout << path.string() << std::endl;
+        Tpl img;
+        if(!img.Load(&imageStream)){
+            return 1;
+        }
+        
+        std::string format = "png";
+        if(gctools.is_used("--format")){
+            format = gctools.get<std::string>("--format");
+        }
+        
+        path.replace_extension("."+format);
+
+        if(format == "png"){
+            stbi_write_png(path.string().c_str(), img.GetImage(0)->mWidth, img.GetImage(0)->mHeight, 4, img.GetImage(0)->GetData(), img.GetImage(0)->mWidth * 4);
+        } else if(format == "jpeg" || format == "jpg") {
+            stbi_write_jpg(path.string().c_str(), img.GetImage(0)->mWidth, img.GetImage(0)->mHeight, 4, img.GetImage(0)->GetData(), 100);
+        } else if(format == "tga"){
+            stbi_write_tga(path.string().c_str(), img.GetImage(0)->mWidth, img.GetImage(0)->mHeight, 4, img.GetImage(0)->GetData());
+        } else if(format == "bmp"){
+            stbi_write_bmp(path.string().c_str(), img.GetImage(0)->mWidth, img.GetImage(0)->mHeight, 4, img.GetImage(0)->GetData());
+        } else {
+            std::cerr << "Unrecognized output format " << format << std::endl;
+            return 1;
+        }
+
+    } else if(gctools.is_used("--convert-bti")){
         bStream::CFileStream imageStream(path.string(), bStream::Endianess::Big, bStream::OpenMode::In);
         path.replace_extension(".png");
 
@@ -234,12 +262,17 @@ int main(int argc, char* argv[]){
             path = gctools.get("--output");
         }
 
-        Bti img;
-        if(!img.Load(&imageStream)){
-            return 1;
-        }
+        Tpl tpl;
+        if(!tpl.Load(&imageStream)){
 
-        stbi_write_png(path.string().c_str(), img.mWidth, img.mHeight, 4, img.GetData(), img.mWidth * 4);
+            Bti img;
+            if(!img.Load(&imageStream)){
+                stbi_write_png(path.string().c_str(), img.mWidth, img.mHeight, 4, img.GetData(), img.mWidth * 4);
+                return 1;
+            }
+        } else {
+            stbi_write_png(path.string().c_str(), tpl.GetImage(0)->mWidth, tpl.GetImage(0)->mHeight, 4, tpl.GetImage(0)->GetData(), tpl.GetImage(0)->mWidth * 4);
+        }
     } else if(gctools.is_used("--extract")){
         if(std::filesystem::is_directory(path)){
             std::cerr << path.string() << " is a directory" << std::endl;

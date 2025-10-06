@@ -29,23 +29,23 @@ void ExtractFolder(std::shared_ptr<Archive::Folder> folder){
 
 void PackFolder(std::shared_ptr<Archive::Rarc> arc, std::shared_ptr<Archive::Folder> folder, std::filesystem::path path){
     std::filesystem::current_path(path);
-    
+
     for (auto const& dir_entry : std::filesystem::directory_iterator(path)){
         if(std::filesystem::is_directory(dir_entry.path())){
             std::shared_ptr<Archive::Folder> subdir = Archive::Folder::Create(arc);
             subdir->SetName(dir_entry.path().filename().string());
             folder->AddSubdirectory(subdir);
-            
+
             PackFolder(arc, subdir, dir_entry.path());
 
         } else {
             std::shared_ptr<Archive::File> file = Archive::File::Create();
 
             bStream::CFileStream fileStream(dir_entry.path().string(), bStream::Endianess::Big, bStream::OpenMode::In);
-            
+
             uint8_t* fileData = new uint8_t[fileStream.getSize()];
             fileStream.readBytesTo(fileData, fileStream.getSize());
-            
+
             file->SetData(fileData, fileStream.getSize());
             file->SetName(dir_entry.path().filename().string());
 
@@ -57,7 +57,7 @@ void PackFolder(std::shared_ptr<Archive::Rarc> arc, std::shared_ptr<Archive::Fol
     std::filesystem::current_path(std::filesystem::current_path().parent_path());
 }
 
-void PackArchive(std::filesystem::path path, Compression::Format format, int level, bool cmpExt){
+void PackArchive(std::filesystem::path path, Compression::Format format, int level, bool cmpExt, bool isLE){
     std::shared_ptr<Archive::Rarc> archive = Archive::Rarc::Create();
     std::shared_ptr<Archive::Folder> root = Archive::Folder::Create(archive);
     archive->SetRoot(root);
@@ -75,28 +75,32 @@ void PackArchive(std::filesystem::path path, Compression::Format format, int lev
 
     PackFolder(archive, root, std::filesystem::current_path() / path);
 
+    if(isLE){
+        archive->SetByteOrder(isLE ? bStream::Endianess::Little : bStream::Endianess::Big);
+    }
+
     archive->SaveToFile(path.filename().string()+ext, format, (uint8_t)(level % 9));
 }
 
 void PackFolderISO(std::shared_ptr<Disk::Image> img, std::shared_ptr<Disk::Folder> folder, std::filesystem::path path){
     std::filesystem::current_path(path);
-    
+
     for (auto const& dir_entry : std::filesystem::directory_iterator(path)){
         if(std::filesystem::is_directory(dir_entry.path())){
             std::shared_ptr<Disk::Folder> subdir = Disk::Folder::Create(img);
             subdir->SetName(dir_entry.path().filename().string());
             folder->AddSubdirectory(subdir);
-            
+
             PackFolderISO(img, subdir, dir_entry.path());
 
         } else {
             std::shared_ptr<Disk::File> file = Disk::File::Create();
 
             bStream::CFileStream fileStream(dir_entry.path().string(), bStream::Endianess::Big, bStream::OpenMode::In);
-            
+
             uint8_t* fileData = new uint8_t[fileStream.getSize()];
             fileStream.readBytesTo(fileData, fileStream.getSize());
-            
+
             file->SetData(fileData, fileStream.getSize());
             file->SetName(dir_entry.path().filename().string());
 
@@ -126,7 +130,7 @@ void PackISO(std::filesystem::path path){
     if(root->GetFile("sys/apploader.img") == nullptr){
         std::cout << "Root missing sys/apploader.img" << std::endl;
         return;
-    } 
+    }
 
     if(root->GetFile("sys/boot.bin") == nullptr){
         std::cout << "Root missing sys/boot.bin" << std::endl;
@@ -180,6 +184,9 @@ int main(int argc, char* argv[]){
     gctools.add_argument("-g", "--gcm").help("Indicate input is for GCM").flag();
     gctools.add_argument("-p", "--pack").help("Pack to archive/gcm").flag();
     gctools.add_argument("-a", "--arcext").help("Set the output extension to arc regardless of compression").flag();
+    gctools.add_argument("-e", "--little-endian").help("Target little endian archive").flag();
+    gctools.add_argument("-E", "--big-endian").help("Target big endian archive").flag();
+    gctools.add_argument("-C", "--convert-endian").help("Convert archive endian").flag();
 
     try {
         gctools.parse_args(argc, argv);
@@ -204,12 +211,12 @@ int main(int argc, char* argv[]){
         if(!img.Load(&imageStream)){
             return 1;
         }
-        
+
         std::string format = "png";
         if(gctools.is_used("--format")){
             format = gctools.get<std::string>("--format");
         }
-        
+
         path.replace_extension("."+format);
 
         if(format == "png"){
@@ -233,12 +240,12 @@ int main(int argc, char* argv[]){
         if(!img.Load(&imageStream)){
             return 1;
         }
-        
+
         std::string format = "png";
         if(gctools.is_used("--format")){
             format = gctools.get<std::string>("--format");
         }
-        
+
         path.replace_extension("."+format);
 
         if(format == "png"){
@@ -253,26 +260,32 @@ int main(int argc, char* argv[]){
             std::cerr << "Unrecognized output format " << format << std::endl;
             return 1;
         }
-        
+
     } else if(gctools.is_used("--thumbnail")){
+        std::string ext = path.extension();
         bStream::CFileStream imageStream(path.string(), bStream::Endianess::Big, bStream::OpenMode::In);
         path.replace_extension(".png");
-        
+
         if(gctools.is_used("--output")){
             path = gctools.get("--output");
         }
 
-        Tpl tpl;
-        if(!tpl.Load(&imageStream)){
-            imageStream.seek(0);
+        if(ext == ".bti"){
             Bti img;
-            if(!img.Load(&imageStream)){
+            if(img.Load(&imageStream)){
                 stbi_write_png(path.string().c_str(), img.mWidth, img.mHeight, 4, img.GetData(), img.mWidth * 4);
-                return 1;
+                return 0;
             }
-        } else {
-            stbi_write_png(path.string().c_str(), tpl.GetImage(0)->mWidth, tpl.GetImage(0)->mHeight, 4, tpl.GetImage(0)->GetData(), tpl.GetImage(0)->mWidth * 4);
         }
+
+        if(ext == ".tpl"){
+            Tpl tpl;
+            if(tpl.Load(&imageStream)){
+                stbi_write_png(path.string().c_str(), tpl.GetImage(0)->mWidth, tpl.GetImage(0)->mHeight, 4, tpl.GetImage(0)->GetData(), tpl.GetImage(0)->mWidth * 4);
+                return 0;
+            }
+        }
+        return 1;
     } else if(gctools.is_used("--extract")){
         if(std::filesystem::is_directory(path)){
             std::cerr << path.string() << " is a directory" << std::endl;
@@ -290,7 +303,6 @@ int main(int argc, char* argv[]){
         } else {
 
             std::shared_ptr<Archive::Rarc> archive = Archive::Rarc::Create();
-            
             bStream::CFileStream archiveStream(path.string(), bStream::Endianess::Big, bStream::OpenMode::In);
             if(!archive->Load(&archiveStream)){
                 std::cerr << "Couldn't parse archive " << path.string() << std::endl;
@@ -323,7 +335,7 @@ int main(int argc, char* argv[]){
             if(format != Compression::Format::None){
                 msg.setStandardButtons(QMessageBox::NoButton);
                 msg.setModal(true);
-                
+
                 // Hack to make it look a little nicer.
                 auto labelIcon = msg.findChild<QLabel*>("qt_msgboxex_icon_label");
                 if (labelIcon) {
@@ -336,16 +348,55 @@ int main(int argc, char* argv[]){
                 }
 
                 msg.open();
-                
+
                 // Call this three times as a complete hack so it draws the ui. Very funny!
                 QCoreApplication::processEvents();
                 QCoreApplication::processEvents();
                 QCoreApplication::processEvents();
             }*/
 
-            PackArchive(path, format, level, gctools.is_used("--arcext"));
+            PackArchive(path, format, level, gctools.is_used("--arcext"), gctools.is_used("--little-endian"));
             //if(format != Compression::Format::None) msg.close();
         }
+    } else if(gctools.is_used("--convert-endian")) {
+        std::string outpath = path.string();
+        if(gctools.is_used("--output")){
+            outpath = gctools.get("--output");
+        }
+
+        if(std::filesystem::is_directory(path)){
+            std::cerr << path.string() << " is a directory" << std::endl;
+            return 1;
+        }
+
+        std::shared_ptr<Archive::Rarc> archive = Archive::Rarc::Create();
+        Compression::Format compressionFormat = Compression::Format::None;
+        {
+            bStream::CFileStream archiveStream(path.string(), bStream::Endianess::Big, bStream::OpenMode::In);
+
+            switch (archiveStream.peekUInt32(0)) {
+                case 'Yaz0':
+                    compressionFormat = Compression::Format::YAZ0;
+                    break;
+                case 'Yay0':
+                    compressionFormat = Compression::Format::YAY0;
+                    break;
+            }
+
+            if(!archive->Load(&archiveStream)){
+                std::cerr << "Couldn't parse archive " << path.string() << std::endl;
+                return 1;
+            }
+        }
+
+        if(gctools.is_used("--little-endian")){
+            archive->SetByteOrder(bStream::Little);
+        } else if(gctools.is_used("--big-endian")){
+            archive->SetByteOrder(bStream::Big);
+        }
+
+        archive->SaveToFile(outpath, compressionFormat, 7, true);
+
     } else if(gctools.is_used("--decompress")) {
         std::string outpath = path.string()+".decompressed";
         if(gctools.is_used("--output")){
